@@ -11,6 +11,17 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="FarmStand">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="FarmStand — Find Local Farmers Markets">
+<meta property="og:description" content="Fresh veggies, eggs & honey near you, anywhere in the world. Free, no signup.">
+<meta property="og:url" content="https://skydog84.github.io/farmstand/">
+<meta property="og:image" content="https://skydog84.github.io/farmstand/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://skydog84.github.io/farmstand/og-image.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -367,8 +378,9 @@ input,textarea{font-family:inherit}
 <script>
 /* =============== FarmStand =============== */
 
-/* ---- warm PWA icon generated at runtime ---- */
+/* ---- warm PWA icon generated at runtime (fallback for the standalone single-file copy) ---- */
 (function makeIcons(){
+  if(location.hostname==='skydog84.github.io')return; // real icon files are served there
   try{
     const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');
     const g=x.createLinearGradient(0,0,0,512);
