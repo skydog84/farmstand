@@ -1,0 +1,16 @@
+{
+  "name": "FarmStand — Find Local Farmers Markets",
+  "short_name": "FarmStand",
+  "description": "Find farmers markets near you, anywhere in the world. See what they sell — veggies, eggs, meat, honey & more.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E2662E",
+  "theme_color": "#E2662E",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
