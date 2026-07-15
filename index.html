@@ -452,7 +452,7 @@ async function searchCity(q){
   showScreen('mapScreen');ensureMap();status('<span class="spin"></span>Searching for “'+esc(q)+'”…');
   try{
     const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),
-      {headers:{'Accept':'application/json'}});
+      {headers:{'Accept':'application/json'},signal:timeoutSignal(10000)});
     const js=await r.json();
     if(!js.length){status('');toast('Hmm, couldn\'t find “'+esc(q)+'” — try adding the state or country');return;}
     map._skipFetch=true;map.setView([+js[0].lat,+js[0].lon],12);
@@ -464,8 +464,10 @@ async function searchCity(q){
 const OVERPASS=[
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
 ];
+function timeoutSignal(ms){try{return AbortSignal.timeout(ms)}catch(e){const c=new AbortController();setTimeout(()=>c.abort(),ms);return c.signal}}
 async function loadMarketsHere(announce){
   if(!map)return;
   const c=map.getCenter();const z=map.getZoom();
@@ -483,7 +485,7 @@ async function loadMarketsHere(announce){
   for(const url of OVERPASS){
     try{
       const r=await fetch(url,{method:'POST',body:'data='+encodeURIComponent(q),
-        headers:{'Content-Type':'application/x-www-form-urlencoded'}});
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:timeoutSignal(14000)});
       if(!r.ok)continue;
       data=await r.json();break;
     }catch(e){}
