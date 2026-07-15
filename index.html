@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>FarmStand — Find Local Farmers Markets</title>
+<meta name="description" content="Find farmers markets near you, anywhere in the world. See what they sell — veggies, eggs, meat, honey & more.">
+<meta name="theme-color" content="#E2662E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FarmStand">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{
+  --sun:#FFC94D; --peach:#FFAD6B; --orange:#E2662E; --deep:#8C3B1B;
+  --soil:#5C2E14; --cream:#FFF6E9; --card:#FFFDF8; --green:#5B7B3C;
+  --ink:#42250F; --muted:#9C6B4A;
+  --shadow:0 10px 30px rgba(92,46,20,.25);
+  --radius:22px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--cream)}
+button{font-family:inherit;border:none;cursor:pointer;background:none}
+input,textarea{font-family:inherit}
+
+.screen{position:fixed;inset:0;display:none;flex-direction:column}
+.screen.active{display:flex}
+
+/* ---------- HOME: sunset field ---------- */
+#home{
+  background:linear-gradient(180deg,#3E1F47 0%,#7A2D3E 14%,#C24D2C 32%,#E2662E 46%,#F58B3C 58%,#FFAD6B 70%,#FFC94D 82%,#FFE1A0 100%);
+  align-items:center;justify-content:flex-start;text-align:center;overflow:hidden;
+}
+#home .sun{
+  position:absolute;left:50%;top:46%;transform:translateX(-50%);
+  width:46vmin;height:46vmin;border-radius:50%;
+  background:radial-gradient(circle at 50% 40%,#FFF3C4 0%,#FFD97A 45%,#FFB84D 75%,rgba(255,184,77,0) 100%);
+  filter:blur(1px);animation:sunrise 2.2s ease-out;
+}
+@keyframes sunrise{from{top:60%;opacity:0}to{top:46%;opacity:1}}
+#home .fields{position:absolute;left:0;right:0;bottom:0;pointer-events:none}
+#home .fields svg{display:block;width:100%}
+#home .birds{position:absolute;top:16%;left:12%;font-size:20px;opacity:.7;animation:drift 30s linear infinite}
+@keyframes drift{from{transform:translateX(0)}to{transform:translateX(80vw)}}
+.home-content{position:relative;z-index:2;margin-top:max(9vh,60px);padding:0 28px;width:100%;max-width:430px}
+.logo-basket{font-size:56px;line-height:1;filter:drop-shadow(0 4px 10px rgba(60,20,0,.35));animation:bob 3.5s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.home-title{font-size:clamp(34px,9vw,44px);font-weight:800;color:#FFF6E9;letter-spacing:-.5px;line-height:1.08;margin-top:10px;text-shadow:0 3px 14px rgba(70,20,40,.45)}
+.home-sub{margin-top:12px;font-size:16.5px;color:#FFE9C9;font-weight:500;text-shadow:0 2px 8px rgba(70,20,40,.4)}
+.home-actions{position:absolute;left:0;right:0;bottom:max(env(safe-area-inset-bottom),16px);z-index:3;display:flex;flex-direction:column;align-items:center;gap:14px;padding:0 26px 18px}
+.btn-big{
+  width:100%;max-width:400px;padding:19px 24px;border-radius:999px;
+  background:linear-gradient(135deg,#FFDD8A,#FFB44D);color:#6B2F10;
+  font-size:19px;font-weight:800;letter-spacing:.2px;
+  box-shadow:0 12px 32px rgba(60,20,0,.38),inset 0 1px 0 rgba(255,255,255,.7);
+  transition:transform .12s ease;
+}
+.btn-big:active{transform:scale(.97)}
+.home-search{width:100%;max-width:400px;display:flex;gap:8px}
+.home-search input{
+  flex:1;padding:14px 18px;border-radius:999px;border:none;font-size:16px;
+  background:rgba(255,248,235,.92);color:var(--ink);box-shadow:0 6px 18px rgba(60,20,0,.25);outline:none;
+}
+.home-search button{padding:14px 20px;border-radius:999px;background:rgba(92,46,20,.85);color:#FFE9C9;font-size:16px;font-weight:700;box-shadow:0 6px 18px rgba(60,20,0,.25)}
+.hint{color:#FFE0B5;font-size:12.5px;opacity:.9;text-shadow:0 1px 6px rgba(70,20,40,.4)}
+.hint b{color:#fff}
+.info-btn{position:absolute;top:calc(env(safe-area-inset-top) + 12px);right:14px;z-index:4;width:38px;height:38px;border-radius:50%;background:rgba(60,25,10,.35);color:#FFE9C9;font-size:18px;font-weight:700;backdrop-filter:blur(4px)}
+
+/* ---------- MAP SCREEN ---------- */
+#mapScreen{background:var(--cream)}
+.topbar{
+  position:absolute;top:0;left:0;right:0;z-index:1000;
+  padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;
+  display:flex;gap:8px;align-items:center;
+  background:linear-gradient(180deg,rgba(255,246,233,.97) 60%,rgba(255,246,233,0));
+}
+.topbar .back{width:42px;height:42px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);font-size:18px;color:var(--deep);flex:none}
+.topbar .searchwrap{flex:1;display:flex;background:var(--card);border-radius:999px;box-shadow:var(--shadow);overflow:hidden}
+.topbar input{flex:1;border:none;outline:none;padding:11px 16px;font-size:15px;background:transparent;color:var(--ink)}
+.topbar .go{padding:0 16px;color:var(--orange);font-size:17px;font-weight:800}
+.topbar .toggle{width:42px;height:42px;border-radius:50%;background:var(--orange);color:#fff;font-size:17px;box-shadow:var(--shadow);flex:none}
+#map{flex:1;z-index:1}
+.leaflet-container{font:inherit}
+.locate-btn{position:absolute;right:14px;bottom:calc(env(safe-area-inset-bottom) + 96px);z-index:1000;width:48px;height:48px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);font-size:20px}
+.status-pill{
+  position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 30px);
+  z-index:1000;background:rgba(92,46,20,.92);color:#FFE9C9;padding:10px 20px;border-radius:999px;
+  font-size:14px;font-weight:600;box-shadow:var(--shadow);max-width:88%;text-align:center;display:none;
+}
+.status-pill.show{display:block}
+.addmarket-btn{
+  position:absolute;left:14px;bottom:calc(env(safe-area-inset-bottom) + 30px);z-index:1000;
+  background:linear-gradient(135deg,#7BA05B,#5B7B3C);color:#fff;font-weight:700;font-size:14px;
+  padding:12px 16px;border-radius:999px;box-shadow:var(--shadow);
+}
+.pin{
+  width:38px;height:38px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);
+  background:linear-gradient(135deg,#FF9A4D,#E2662E);border:2.5px solid #FFF3DC;
+  box-shadow:0 4px 12px rgba(92,46,20,.4);display:flex;align-items:center;justify-content:center;
+}
+.pin span{transform:rotate(45deg);font-size:17px}
+.pin.mine{background:linear-gradient(135deg,#8FBF6A,#5B7B3C)}
+.me-dot{width:18px;height:18px;border-radius:50%;background:#4A90D9;border:3px solid #fff;box-shadow:0 0 0 6px rgba(74,144,217,.25),0 2px 6px rgba(0,0,0,.3)}
+
+/* ---------- LIST VIEW ---------- */
+#listPanel{
+  position:absolute;inset:0;z-index:900;background:var(--cream);display:none;flex-direction:column;
+  padding-top:calc(env(safe-area-inset-top) + 66px);
+}
+#listPanel.show{display:flex}
+#listPanel .cards{flex:1;overflow-y:auto;padding:8px 14px calc(env(safe-area-inset-bottom) + 20px)}
+.mcard{
+  background:var(--card);border-radius:var(--radius);box-shadow:0 6px 20px rgba(92,46,20,.12);
+  margin-bottom:14px;overflow:hidden;display:flex;flex-direction:column;
+}
+.mcard .photo{height:120px;background:linear-gradient(135deg,#FFAD6B,#E2662E);display:flex;align-items:center;justify-content:center;font-size:44px;background-size:cover;background-position:center}
+.mcard .body{padding:14px 16px 16px}
+.mcard h3{font-size:17px;font-weight:800;color:var(--ink)}
+.mcard .meta{font-size:13.5px;color:var(--muted);margin-top:3px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.chip{background:#FBEBD7;color:#8C4A1B;font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px}
+.chip.green{background:#EAF2DF;color:#4A6B2C}
+
+/* ---------- DETAIL SHEET (Zillow-style) ---------- */
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;z-index:1200;background:var(--card);
+  border-radius:26px 26px 0 0;box-shadow:0 -12px 40px rgba(60,20,0,.35);
+  max-height:78%;display:flex;flex-direction:column;transform:translateY(105%);
+  transition:transform .32s cubic-bezier(.32,.72,.35,1);
+}
+.sheet.open{transform:translateY(0)}
+.sheet .grab{width:44px;height:5px;border-radius:99px;background:#E4CDB4;margin:10px auto 0;flex:none}
+.sheet .sc{overflow-y:auto;padding:6px 0 calc(env(safe-area-inset-bottom) + 20px)}
+.sheet .hero{
+  height:170px;margin:10px 16px 0;border-radius:18px;overflow:hidden;position:relative;
+  background:linear-gradient(160deg,#FFC94D,#E2662E 70%,#8C3B1B);display:flex;align-items:center;justify-content:center;
+  background-size:cover;background-position:center;
+}
+.sheet .hero .ph-emoji{font-size:58px;filter:drop-shadow(0 4px 8px rgba(60,20,0,.3))}
+.sheet .hero .dist{position:absolute;top:10px;right:10px;background:rgba(255,246,233,.95);color:var(--deep);font-size:12.5px;font-weight:800;padding:6px 12px;border-radius:999px}
+.sheet .close{position:absolute;top:20px;left:26px;z-index:5;width:34px;height:34px;border-radius:50%;background:rgba(70,30,10,.45);color:#fff;font-size:15px;backdrop-filter:blur(3px)}
+.sheet-body{padding:14px 20px 0}
+.sheet-body h2{font-size:22px;font-weight:800;letter-spacing:-.3px}
+.sheet-body .sub{color:var(--muted);font-size:14px;margin-top:3px}
+.openbadge{display:inline-block;margin-top:8px;font-size:12.5px;font-weight:800;padding:5px 12px;border-radius:999px}
+.openbadge.yes{background:#EAF2DF;color:#4A6B2C}
+.openbadge.unk{background:#F5E8D6;color:#9C6B4A}
+.rows{margin-top:14px;border-top:1px solid #F2E3CE}
+.row{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #F2E3CE;font-size:15px}
+.row .ic{width:26px;text-align:center;font-size:17px;flex:none}
+.row a{color:#C05621;font-weight:700;text-decoration:none;word-break:break-all}
+.row .lbl{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.sheet .sect{margin-top:16px;font-size:13px;font-weight:800;color:var(--deep);text-transform:uppercase;letter-spacing:.8px}
+.sheet .desc{margin-top:8px;font-size:15px;line-height:1.5;color:#5C3A22}
+.sheet-actions{display:flex;gap:10px;padding:16px 20px 6px}
+.btn{flex:1;padding:15px;border-radius:16px;font-size:15.5px;font-weight:800;text-align:center;text-decoration:none}
+.btn.warm{background:linear-gradient(135deg,#F58B3C,#E2662E);color:#fff;box-shadow:0 8px 20px rgba(226,102,46,.4)}
+.btn.soft{background:#FBEBD7;color:#8C4A1B}
+
+/* ---------- EDIT SCREEN ---------- */
+#editScreen{background:var(--cream);z-index:1500}
+#editScreen .ehead{
+  padding:calc(env(safe-area-inset-top) + 14px) 18px 14px;display:flex;align-items:center;gap:12px;
+  background:linear-gradient(135deg,#F58B3C,#C24D2C);color:#FFF6E9;box-shadow:var(--shadow);
+}
+#editScreen .ehead button{font-size:17px;color:#FFF6E9;font-weight:700}
+#editScreen .ehead h2{font-size:18px;font-weight:800;flex:1}
+#editScreen form{flex:1;overflow-y:auto;padding:18px 18px calc(env(safe-area-inset-bottom) + 30px)}
+.f-label{display:block;font-size:13px;font-weight:800;color:var(--deep);text-transform:uppercase;letter-spacing:.6px;margin:18px 0 7px}
+.f-label:first-child{margin-top:0}
+.f-input,.f-area{
+  width:100%;padding:13px 15px;border-radius:14px;border:1.5px solid #EBD5B8;background:var(--card);
+  font-size:16px;color:var(--ink);outline:none;
+}
+.f-input:focus,.f-area:focus{border-color:var(--orange)}
+.f-area{min-height:84px;resize:vertical}
+.photo-drop{
+  border:2px dashed #E0B98C;border-radius:18px;background:#FFF9F0;min-height:130px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  color:#B07840;font-weight:700;font-size:14.5px;overflow:hidden;position:relative;cursor:pointer;
+}
+.photo-drop img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.photo-drop .badge{position:absolute;bottom:8px;right:8px;background:rgba(92,46,20,.85);color:#FFE9C9;font-size:12px;padding:5px 11px;border-radius:999px}
+.prod-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.prod{position:relative}
+.prod input{position:absolute;opacity:0;pointer-events:none}
+.prod label{
+  display:flex;align-items:center;gap:8px;padding:12px 12px;border-radius:14px;background:var(--card);
+  border:1.5px solid #EBD5B8;font-size:14px;font-weight:700;color:#6B4226;cursor:pointer;transition:all .12s;
+}
+.prod input:checked + label{background:linear-gradient(135deg,#FFE3B8,#FFC98A);border-color:#E2662E;color:#8C3B1B;box-shadow:0 4px 12px rgba(226,102,46,.25)}
+.prod .em{font-size:18px}
+.save-btn{width:100%;margin-top:26px;padding:17px;border-radius:16px;background:linear-gradient(135deg,#F58B3C,#E2662E);color:#fff;font-size:17px;font-weight:800;box-shadow:0 10px 26px rgba(226,102,46,.45)}
+.del-btn{width:100%;margin-top:12px;padding:13px;color:#B04A2E;font-weight:700;font-size:14px}
+
+/* ---------- INFO MODAL ---------- */
+#infoModal{position:fixed;inset:0;z-index:2000;background:rgba(60,25,10,.55);display:none;align-items:flex-end;justify-content:center}
+#infoModal.show{display:flex}
+#infoModal .card{background:var(--card);border-radius:26px 26px 0 0;padding:26px 24px calc(env(safe-area-inset-bottom) + 26px);max-width:520px;width:100%;max-height:80%;overflow-y:auto}
+#infoModal h3{font-size:20px;font-weight:800;color:var(--deep)}
+#infoModal p{font-size:15px;line-height:1.55;color:#5C3A22;margin-top:10px}
+#infoModal .steps{margin-top:8px}
+#infoModal .step{display:flex;gap:12px;margin-top:12px;font-size:14.5px;line-height:1.45;color:#5C3A22}
+#infoModal .step .n{flex:none;width:26px;height:26px;border-radius:50%;background:#FBEBD7;color:#8C4A1B;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center}
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:calc(env(safe-area-inset-bottom) + 40px);
+  z-index:3000;background:rgba(92,46,20,.95);color:#FFE9C9;padding:12px 22px;border-radius:999px;
+  font-size:14.5px;font-weight:700;opacity:0;transition:all .3s;pointer-events:none;box-shadow:var(--shadow);
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.spin{display:inline-block;width:15px;height:15px;border:2.5px solid #FFE9C9;border-top-color:transparent;border-radius:50%;animation:sp 1s linear infinite;vertical-align:-3px;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- ================= HOME ================= -->
+<div class="screen active" id="home">
+  <button class="info-btn" onclick="openInfo()">ⓘ</button>
+  <div class="sun"></div>
+  <div class="birds">🕊️</div>
+  <div class="fields">
+    <svg viewBox="0 0 1440 480" preserveAspectRatio="none" style="height:38vh">
+      <path d="M0,200 C220,140 420,240 720,190 C1020,140 1240,230 1440,180 L1440,480 L0,480 Z" fill="#B8641F" opacity=".55"/>
+      <path d="M0,270 C260,210 520,300 800,255 C1080,210 1280,290 1440,250 L1440,480 L0,480 Z" fill="#8C4A1B" opacity=".75"/>
+      <path d="M0,340 C240,290 520,370 820,330 C1100,293 1300,360 1440,325 L1440,480 L0,480 Z" fill="#5C2E14"/>
+      <g fill="#3D1E0C">
+        <path d="M1090,275 l55,-42 55,42 v70 h-110 Z"/>
+        <rect x="1130" y="305" width="28" height="40" rx="3"/>
+        <circle cx="1145" cy="288" r="7" fill="#2A1408"/>
+      </g>
+      <g stroke="#3D1E0C" stroke-width="5" stroke-linecap="round">
+        <line x1="180" y1="330" x2="180" y2="292"/><line x1="240" y1="338" x2="240" y2="300"/>
+        <line x1="300" y1="332" x2="300" y2="294"/><line x1="160" y1="312" x2="320" y2="316"/>
+      </g>
+      <g font-size="30">
+        <text x="420" y="352">🌾</text><text x="480" y="366">🌾</text><text x="545" y="354">🌻</text>
+        <text x="640" y="368">🌾</text><text x="712" y="352">🌾</text><text x="60" y="380">🌻</text>
+        <text x="880" y="370">🌾</text><text x="950" y="356">🌾</text>
+      </g>
+    </svg>
+  </div>
+  <div class="home-content">
+    <div class="logo-basket">🧺</div>
+    <h1 class="home-title">Find Local<br>Farmers Markets</h1>
+    <p class="home-sub">Fresh veggies, eggs, honey &amp; friendly faces — near you, anywhere in the world.</p>
+  </div>
+  <div class="home-actions">
+    <button class="btn-big" id="findBtn" onclick="findNearMe()">📍 &nbsp;Find Markets Near Me</button>
+    <div class="home-search">
+      <input id="homeSearch" type="text" placeholder="or search a city or town…" onkeydown="if(event.key==='Enter')searchCity(this.value)">
+      <button onclick="searchCity(document.getElementById('homeSearch').value)">Go</button>
+    </div>
+    <div class="hint">💡 Tap <b>ⓘ</b> to see how to add this app to your phone's home screen</div>
+  </div>
+</div>
+
+<!-- ================= MAP ================= -->
+<div class="screen" id="mapScreen">
+  <div class="topbar">
+    <button class="back" onclick="showScreen('home')">←</button>
+    <div class="searchwrap">
+      <input id="mapSearch" type="text" placeholder="Search another city…" onkeydown="if(event.key==='Enter')searchCity(this.value)">
+      <button class="go" onclick="searchCity(document.getElementById('mapSearch').value)">🔍</button>
+    </div>
+    <button class="toggle" id="listToggle" onclick="toggleList()" title="List view">☰</button>
+  </div>
+  <div id="map"></div>
+  <button class="locate-btn" onclick="findNearMe()" title="My location">🎯</button>
+  <button class="addmarket-btn" onclick="addNewMarket()">＋ Add your market</button>
+  <div class="status-pill" id="statusPill"></div>
+
+  <div id="listPanel">
+    <div class="cards" id="cardsWrap"></div>
+  </div>
+
+  <!-- Zillow-style detail sheet -->
+  <div class="sheet" id="sheet">
+    <div class="grab"></div>
+    <button class="close" onclick="closeSheet()">✕</button>
+    <div class="sc">
+      <div class="hero" id="shHero"><span class="ph-emoji" id="shEmoji">🧺</span><span class="dist" id="shDist"></span></div>
+      <div class="sheet-body">
+        <h2 id="shName"></h2>
+        <div class="sub" id="shType"></div>
+        <span class="openbadge unk" id="shOpen"></span>
+        <div class="sect" id="shProdLbl" style="display:none">Fresh at this market</div>
+        <div class="chips" id="shChips"></div>
+        <div class="sect" id="shDescLbl" style="display:none">About</div>
+        <div class="desc" id="shDesc"></div>
+        <div class="rows" id="shRows"></div>
+      </div>
+      <div class="sheet-actions">
+        <a class="btn warm" id="shDirections" target="_blank" rel="noopener">🧭 Directions</a>
+        <button class="btn soft" onclick="editCurrent()">✏️ Edit page</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= EDIT ================= -->
+<div class="screen" id="editScreen">
+  <div class="ehead">
+    <button onclick="closeEdit()">← Back</button>
+    <h2 id="editTitle">Your Market Page</h2>
+  </div>
+  <form id="editForm" onsubmit="saveEdit(event)">
+    <label class="f-label">Market photo</label>
+    <div class="photo-drop" onclick="document.getElementById('photoInput').click()">
+      <img id="photoPreview" style="display:none" alt="">
+      <span id="photoHint">📷</span>
+      <span id="photoHint2">Tap to add a photo of your stand</span>
+      <span class="badge" id="photoBadge" style="display:none">Tap to change</span>
+    </div>
+    <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="photoPicked(this)">
+
+    <label class="f-label">Market name</label>
+    <input class="f-input" id="fName" type="text" placeholder="e.g. Sunny Acres Farmers Market" required>
+
+    <label class="f-label">What do you sell? (tap all that apply)</label>
+    <div class="prod-grid" id="prodGrid"></div>
+
+    <label class="f-label">Hours</label>
+    <input class="f-input" id="fHours" type="text" placeholder="e.g. Sat 8am–1pm, Wed 3–7pm">
+
+    <label class="f-label">Phone number</label>
+    <input class="f-input" id="fPhone" type="tel" placeholder="e.g. (555) 123-4567">
+
+    <label class="f-label">Website or social page</label>
+    <input class="f-input" id="fSite" type="text" placeholder="e.g. mymarket.com or facebook page">
+
+    <label class="f-label">Tell shoppers about your market</label>
+    <textarea class="f-area" id="fDesc" placeholder="Family-run since 1985. Fresh-picked every morning! We accept SNAP/EBT…"></textarea>
+
+    <button class="save-btn" type="submit">🌻 Save My Market Page</button>
+    <button class="del-btn" type="button" id="delBtn" style="display:none" onclick="deleteMine()">Remove this market I added</button>
+  </form>
+</div>
+
+<!-- ================= INFO ================= -->
+<div id="infoModal" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="card">
+    <h3>🧺 Get FarmStand on your phone</h3>
+    <p>FarmStand installs straight from your browser — no app store needed, and it's tiny.</p>
+    <div class="steps">
+      <div class="step"><span class="n">🍎</span><span><b>iPhone (Safari):</b> tap the <b>Share</b> button (square with arrow), scroll down, tap <b>Add to Home Screen</b>.</span></div>
+      <div class="step"><span class="n">🤖</span><span><b>Android (Chrome):</b> tap the <b>⋮ menu</b>, then <b>Add to Home screen</b> (or "Install app").</span></div>
+    </div>
+    <p>Market pins come from OpenStreetMap, a free world map built by millions of people. Market owners: tap any pin → <b>Edit page</b> to add your photo, products, hours and phone number — or tap <b>＋ Add your market</b> if you're not on the map yet. Your edits are saved on this device.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =============== FarmStand =============== */
+
+/* ---- warm PWA icon generated at runtime ---- */
+(function makeIcons(){
+  try{
+    const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');
+    const g=x.createLinearGradient(0,0,0,512);
+    g.addColorStop(0,'#7A2D3E');g.addColorStop(.45,'#E2662E');g.addColorStop(.8,'#FFC94D');g.addColorStop(1,'#FFE1A0');
+    x.fillStyle=g;x.fillRect(0,0,512,512);
+    x.fillStyle='#FFE9B0';x.beginPath();x.arc(256,300,110,0,7);x.fill();
+    x.fillStyle='#5C2E14';x.beginPath();x.moveTo(0,512);x.quadraticCurveTo(256,360,512,512);x.fill();
+    x.font='230px serif';x.textAlign='center';x.textBaseline='middle';x.fillText('🧺',256,340);
+    const url=c.toDataURL('image/png');
+    const l1=document.createElement('link');l1.rel='apple-touch-icon';l1.href=url;document.head.appendChild(l1);
+    const l2=document.createElement('link');l2.rel='icon';l2.href=url;document.head.appendChild(l2);
+    const manifest={name:'FarmStand — Find Local Farmers Markets',short_name:'FarmStand',display:'standalone',
+      background_color:'#E2662E',theme_color:'#E2662E',start_url:location.href,
+      icons:[{src:url,sizes:'512x512',type:'image/png'},{src:url,sizes:'192x192',type:'image/png'}]};
+    const mb=new Blob([JSON.stringify(manifest)],{type:'application/json'});
+    const lm=document.createElement('link');lm.rel='manifest';lm.href=URL.createObjectURL(mb);document.head.appendChild(lm);
+  }catch(e){}
+})();
+
+/* ---- safe storage (works even where localStorage is blocked) ---- */
+const store=(()=>{let mem={},ok=false;
+  try{localStorage.setItem('__t','1');localStorage.removeItem('__t');ok=true}catch(e){}
+  return{
+    get(k){try{if(ok){const v=localStorage.getItem(k);return v?JSON.parse(v):(mem[k]??null)}}catch(e){}return mem[k]??null},
+    set(k,v){mem[k]=v;try{if(ok)localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+  };
+})();
+
+const PRODUCTS=[
+  ['veg','🥕','Vegetables'],['fruit','🍎','Fruits'],['eggs','🥚','Fresh Eggs'],['meat','🥩','Meat'],
+  ['poultry','🍗','Poultry'],['dairy','🧀','Dairy & Cheese'],['honey','🍯','Honey'],['baked','🥖','Baked Goods'],
+  ['flowers','💐','Flowers'],['jam','🫙','Jams & Preserves'],['syrup','🍁','Maple Syrup'],['plants','🌱','Plants & Seedlings'],
+  ['herbs','🌿','Fresh Herbs'],['crafts','🧺','Handmade Crafts'],['coffee','☕','Coffee & Drinks'],['snap','💳','Accepts SNAP/EBT']
+];
+const PRODMAP=Object.fromEntries(PRODUCTS.map(p=>[p[0],p]));
+
+/* build product checkboxes */
+document.getElementById('prodGrid').innerHTML=PRODUCTS.map(([k,em,name])=>
+  `<div class="prod"><input type="checkbox" id="pk_${k}" value="${k}"><label for="pk_${k}"><span class="em">${em}</span>${name}</label></div>`).join('');
+
+/* ---- state ---- */
+let map=null,markersLayer=null,meMarker=null;
+let markets={};           // id -> market object
+let currentId=null;       // market open in sheet
+let editingId=null;
+let myPos=null;           // [lat,lng]
+let fetchSeq=0;
+
+const $=id=>document.getElementById(id);
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));$(id).classList.add('active');
+  if(id==='mapScreen'&&map)setTimeout(()=>map.invalidateSize(),60);}
+function toast(msg,ms=2600){const t=$('toast');t.innerHTML=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),ms);}
+function status(msg){const p=$('statusPill');if(!msg){p.classList.remove('show');return}p.innerHTML=msg;p.classList.add('show');}
+function openInfo(){$('infoModal').classList.add('show');}
+
+/* ---- map ---- */
+function ensureMap(){
+  if(map)return;
+  map=L.map('map',{zoomControl:false,attributionControl:true}).setView([39.5,-98.35],4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+  markersLayer=L.layerGroup().addTo(map);
+  map.on('moveend',()=>{ if(map._skipFetch){map._skipFetch=false;return} loadMarketsHere(false); });
+}
+
+/* ---- geolocation ---- */
+function findNearMe(){
+  const btn=$('findBtn');const old=btn.innerHTML;btn.innerHTML='<span class="spin"></span>Finding you…';
+  showScreen('mapScreen');ensureMap();status('<span class="spin"></span>Finding your location…');
+  if(!navigator.geolocation){status('');toast('Location not available — try searching a city 🔍');btn.innerHTML=old;return;}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    btn.innerHTML=old;
+    myPos=[pos.coords.latitude,pos.coords.longitude];
+    placeMe();map._skipFetch=true;map.setView(myPos,12);
+    loadMarketsHere(true);
+  },err=>{
+    btn.innerHTML=old;status('');
+    toast('📍 Couldn\'t get your location — search a city above instead');
+  },{enableHighAccuracy:true,timeout:12000,maximumAge:60000});
+}
+function placeMe(){
+  if(!myPos)return;
+  if(meMarker)meMarker.setLatLng(myPos);
+  else meMarker=L.marker(myPos,{icon:L.divIcon({className:'',html:'<div class="me-dot"></div>',iconSize:[18,18],iconAnchor:[9,9]}),zIndexOffset:500}).addTo(map);
+}
+
+/* ---- city search (free geocoder) ---- */
+async function searchCity(q){
+  q=(q||'').trim();if(!q)return;
+  showScreen('mapScreen');ensureMap();status('<span class="spin"></span>Searching for “'+esc(q)+'”…');
+  try{
+    const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q),
+      {headers:{'Accept':'application/json'}});
+    const js=await r.json();
+    if(!js.length){status('');toast('Hmm, couldn\'t find “'+esc(q)+'” — try adding the state or country');return;}
+    map._skipFetch=true;map.setView([+js[0].lat,+js[0].lon],12);
+    loadMarketsHere(true);
+  }catch(e){status('');toast('Search hiccup — check your internet and try again');}
+}
+
+/* ---- load farmers markets from OpenStreetMap (Overpass) ---- */
+const OVERPASS=[
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+];
+async function loadMarketsHere(announce){
+  if(!map)return;
+  const c=map.getCenter();const z=map.getZoom();
+  if(z<9){status('Zoom in a little to load markets 🔍');setTimeout(()=>status(''),2200);renderMine();return;}
+  const rad=Math.min(60000,Math.round( (map.distance(map.getBounds().getNorthWest(),map.getBounds().getSouthEast())/2) )||30000);
+  const seq=++fetchSeq;
+  status('<span class="spin"></span>Looking for farmers markets…');
+  const q=`[out:json][timeout:25];(
+    node["amenity"="marketplace"](around:${rad},${c.lat},${c.lng});
+    way["amenity"="marketplace"](around:${rad},${c.lat},${c.lng});
+    node["shop"="farm"](around:${rad},${c.lat},${c.lng});
+    way["shop"="farm"](around:${rad},${c.lat},${c.lng});
+  );out center tags 120;`;
+  let data=null;
+  for(const url of OVERPASS){
+    try{
+      const r=await fetch(url,{method:'POST',body:'data='+encodeURIComponent(q),
+        headers:{'Content-Type':'application/x-www-form-urlencoded'}});
+      if(!r.ok)continue;
+      data=await r.json();break;
+    }catch(e){}
+  }
+  if(seq!==fetchSeq)return; // a newer search took over
+  if(!data){status('');toast('Couldn\'t reach the market database — check internet & try again');renderMine();return;}
+  for(const el of (data.elements||[])){
+    const lat=el.lat??el.center?.lat, lng=el.lon??el.center?.lon;
+    if(lat==null)continue;
+    const t=el.tags||{};
+    const id='osm_'+el.type+'_'+el.id;
+    markets[id]={
+      id,lat,lng,
+      name:t.name||(t.shop==='farm'?'Farm Stand':'Farmers Market'),
+      kind:t.shop==='farm'?'Farm stand / farm shop':'Farmers market',
+      hours:t.opening_hours||'',phone:t.phone||t['contact:phone']||'',
+      site:t.website||t['contact:website']||'',
+      desc:t.description||'',addr:[t['addr:housenumber'],t['addr:street'],t['addr:city']].filter(Boolean).join(' '),
+      products:[],photo:null,osm:true,
+      ...(store.get('edit_'+id)||{})
+    };
+  }
+  renderAll();
+  const n=visibleMarkets().length;
+  status('');
+  if(announce)toast(n?('🧺 Found '+n+' market'+(n===1?'':'s')+' near here!'):'No markets found right here — try zooming out or another town');
+}
+function visibleMarkets(){
+  if(!map)return[];
+  const b=map.getBounds();
+  return Object.values(markets).filter(m=>b.contains([m.lat,m.lng]));
+}
+
+/* my own added markets */
+function renderMine(){
+  const mine=store.get('myMarkets')||{};
+  for(const id in mine)markets[id]={...mine[id],...(store.get('edit_'+id)||{}),mine:true};
+  renderAll(true);
+}
+function renderAll(skipMineLoad){
+  if(!skipMineLoad){const mine=store.get('myMarkets')||{};for(const id in mine)markets[id]={...mine[id],...(store.get('edit_'+id)||{}),mine:true};}
+  markersLayer.clearLayers();
+  for(const m of Object.values(markets)){
+    const icon=L.divIcon({className:'',html:`<div class="pin ${m.mine?'mine':''}"><span>${m.mine?'🌻':'🧺'}</span></div>`,iconSize:[38,38],iconAnchor:[19,34]});
+    L.marker([m.lat,m.lng],{icon}).addTo(markersLayer).on('click',()=>openSheet(m.id));
+  }
+  renderCards();
+}
+
+/* ---- distance ---- */
+function distMi(a,b){
+  const R=3958.8,dLa=(b[0]-a[0])*Math.PI/180,dLo=(b[1]-a[1])*Math.PI/180;
+  const s=Math.sin(dLa/2)**2+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.sin(dLo/2)**2;
+  return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));
+}
+function distLabel(m){
+  if(!myPos)return'';
+  const d=distMi(myPos,[m.lat,m.lng]);
+  return d<0.1?'right here!':(d<10?d.toFixed(1):Math.round(d))+' mi away';
+}
+
+/* ---- list view ---- */
+function toggleList(){
+  const p=$('listPanel');const on=!p.classList.contains('show');
+  p.classList.toggle('show',on);$('listToggle').textContent=on?'🗺️':'☰';
+  if(on)renderCards();
+}
+function renderCards(){
+  const wrap=$('cardsWrap');
+  let list=visibleMarkets();
+  if(myPos)list.sort((a,b)=>distMi(myPos,[a.lat,a.lng])-distMi(myPos,[b.lat,b.lng]));
+  if(!list.length){wrap.innerHTML='<div style="text-align:center;padding:60px 30px;color:#9C6B4A;font-weight:600">No markets in view yet 🌾<br><br>Zoom the map out, search a city, or add your own market!</div>';return;}
+  wrap.innerHTML=list.map(m=>{
+    const chips=(m.products||[]).slice(0,4).map(k=>PRODMAP[k]?`<span class="chip">${PRODMAP[k][1]} ${PRODMAP[k][2]}</span>`:'').join('')
+      +((m.products||[]).length>4?`<span class="chip green">+${m.products.length-4} more</span>`:'');
+    return`<div class="mcard" onclick="openSheet('${m.id}')">
+      <div class="photo" ${m.photo?`style="background-image:url('${m.photo}')"`:''}>${m.photo?'':(m.mine?'🌻':'🧺')}</div>
+      <div class="body"><h3>${esc(m.name)}</h3>
+      <div class="meta">${esc(m.kind)}${myPos?' · '+distLabel(m):''}${m.hours?' · 🕐 '+esc(m.hours):''}</div>
+      ${chips?`<div class="chips">${chips}</div>`:''}</div></div>`;
+  }).join('');
+}
+
+/* ---- detail sheet ---- */
+function openSheet(id){
+  const m=markets[id];if(!m)return;currentId=id;
+  $('listPanel').classList.remove('show');$('listToggle').textContent='☰';
+  $('shName').textContent=m.name;
+  $('shType').textContent=m.kind+(m.addr?' · '+m.addr:'');
+  const hero=$('shHero');
+  if(m.photo){hero.style.backgroundImage=`url('${m.photo}')`;$('shEmoji').style.display='none';}
+  else{hero.style.backgroundImage='';$('shEmoji').style.display='';$('shEmoji').textContent=m.mine?'🌻':'🧺';}
+  $('shDist').textContent=distLabel(m);$('shDist').style.display=myPos?'':'none';
+  const ob=$('shOpen');
+  if(m.hours){ob.textContent='🕐 '+m.hours;ob.className='openbadge yes';}
+  else{ob.textContent='Hours not listed yet';ob.className='openbadge unk';}
+  const chips=(m.products||[]).map(k=>PRODMAP[k]?`<span class="chip">${PRODMAP[k][1]} ${PRODMAP[k][2]}</span>`:'').join('');
+  $('shChips').innerHTML=chips;$('shProdLbl').style.display=chips?'':'none';
+  $('shDesc').textContent=m.desc||'';$('shDescLbl').style.display=m.desc?'':'none';
+  const rows=[];
+  if(m.phone)rows.push(row('📞','Phone',`<a href="tel:${esc(m.phone)}">${esc(m.phone)}</a>`));
+  if(m.site){const u=m.site.match(/^https?:/)?m.site:'https://'+m.site;rows.push(row('🌐','Website',`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(m.site)}</a>`));}
+  if(!m.phone&&!m.site&&!m.hours)rows.push(row('🌱','This page is waiting to bloom','Are you the owner? Tap <b>Edit page</b> below to add your photo, products, hours & phone!'));
+  $('shRows').innerHTML=rows.join('');
+  $('shDirections').href=`https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lng}`;
+  $('sheet').classList.add('open');
+  map._skipFetch=true;map.panTo([m.lat,m.lng]);
+}
+function row(ic,lbl,val){return`<div class="row"><div class="ic">${ic}</div><div><div class="lbl">${lbl}</div><div>${val}</div></div></div>`;}
+function closeSheet(){$('sheet').classList.remove('open');currentId=null;}
+
+/* ---- edit page ---- */
+let photoData=null;
+function editCurrent(){if(currentId)openEdit(currentId);}
+function openEdit(id){
+  const m=markets[id];if(!m)return;editingId=id;
+  $('editTitle').textContent=m.mine?'Your Market Page':'Edit: '+m.name;
+  $('fName').value=m.name||'';$('fHours').value=m.hours||'';$('fPhone').value=m.phone||'';
+  $('fSite').value=m.site||'';$('fDesc').value=m.desc||'';
+  photoData=m.photo||null;refreshPhotoUI();
+  PRODUCTS.forEach(([k])=>{$('pk_'+k).checked=(m.products||[]).includes(k)});
+  $('delBtn').style.display=m.mine?'':'none';
+  showScreen('editScreen');
+}
+function closeEdit(){showScreen('mapScreen');if(currentId)openSheet(currentId);}
+function refreshPhotoUI(){
+  const img=$('photoPreview');
+  if(photoData){img.src=photoData;img.style.display='';$('photoHint').style.display='none';$('photoHint2').style.display='none';$('photoBadge').style.display='';}
+  else{img.style.display='none';$('photoHint').style.display='';$('photoHint2').style.display='';$('photoBadge').style.display='none';}
+}
+function photoPicked(inp){
+  const f=inp.files&&inp.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    const im=new Image();
+    im.onload=()=>{
+      const max=900,sc=Math.min(1,max/Math.max(im.width,im.height));
+      const c=document.createElement('canvas');c.width=Math.round(im.width*sc);c.height=Math.round(im.height*sc);
+      c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+      photoData=c.toDataURL('image/jpeg',.82);refreshPhotoUI();
+    };
+    im.src=rd.result;
+  };
+  rd.readAsDataURL(f);
+}
+function saveEdit(ev){
+  ev.preventDefault();
+  const m=markets[editingId];if(!m)return;
+  const edit={
+    name:$('fName').value.trim()||m.name,
+    hours:$('fHours').value.trim(),phone:$('fPhone').value.trim(),
+    site:$('fSite').value.trim(),desc:$('fDesc').value.trim(),
+    products:PRODUCTS.map(([k])=>k).filter(k=>$('pk_'+k).checked),
+    photo:photoData
+  };
+  Object.assign(m,edit);
+  store.set('edit_'+editingId,edit);
+  if(m.mine){const mine=store.get('myMarkets')||{};mine[editingId]={...mine[editingId],...m};store.set('myMarkets',mine);}
+  renderAll();showScreen('mapScreen');openSheet(editingId);
+  toast('🌻 Saved! Your market page looks great.');
+}
+function addNewMarket(){
+  ensureMap();
+  const c=myPos&&map.getBounds().contains(myPos)?{lat:myPos[0],lng:myPos[1]}:map.getCenter();
+  const id='mine_'+Math.random().toString(36).slice(2,10);
+  const m={id,lat:c.lat,lng:c.lng,name:'',kind:'Farmers market',hours:'',phone:'',site:'',desc:'',addr:'',products:[],photo:null,mine:true};
+  markets[id]=m;
+  const mine=store.get('myMarkets')||{};mine[id]=m;store.set('myMarkets',mine);
+  toast('📍 Pin dropped at '+(myPos&&m.lat===myPos[0]?'your location':'map center')+' — fill in your page!');
+  openEdit(id);
+}
+function deleteMine(){
+  const mine=store.get('myMarkets')||{};delete mine[editingId];store.set('myMarkets',mine);
+  delete markets[editingId];store.set('edit_'+editingId,null);
+  currentId=null;showScreen('mapScreen');renderAll();closeSheet();toast('Market removed');
+}
+
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+/* swipe sheet down to close */
+(function(){
+  const sh=$('sheet');let y0=null;
+  sh.addEventListener('touchstart',e=>{y0=e.touches[0].clientY},{passive:true});
+  sh.addEventListener('touchend',e=>{
+    if(y0!=null&&e.changedTouches[0].clientY-y0>80&&sh.querySelector('.sc').scrollTop<=0)closeSheet();
+    y0=null;
+  },{passive:true});
+})();
+</script>
+</body>
+</html>
